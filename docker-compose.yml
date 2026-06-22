@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: agritech-postgres
+    restart: unless-stopped
+    ports:
+      - '${POSTGRES_HOST_PORT:-5432}:5432'
+    environment:
+      POSTGRES_DB: ${DB_NAME:-agritech}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASS:-secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations/001_agritech_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-agritech}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  agritech-tracker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agritech-tracker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      AGRITECH_POSTGRES_ENABLED: 'true'
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    volumes:
+      - ./data:/app/data
+
+volumes:
+  postgres_data:

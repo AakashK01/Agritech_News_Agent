@@ -1,0 +1,11 @@
+/** Non-env fixed caps for argv validation (defense in depth). */
+export const BROWSER_ARGV_HARD_MAX_COUNT = 512;
+export const BROWSER_ARG_STRING_HARD_MAX_BYTES = 131_072;
+
+export const BROWSER_COMMAND_TIMEOUT_MS_DEFAULT = 30_000;
+export const BROWSER_READY_TIMEOUT_MS_DEFAULT = 10_000;
+export const BROWSER_READY_POLL_MS_DEFAULT = 500;
+export const BROWSER_NAVIGATION_TIMEOUT_MS_DEFAULT = 90_000;
+export const BROWSER_MAX_ARGV_COUNT_DEFAULT = 256;
+export const BROWSER_MAX_ARG_STRING_BYTES_DEFAULT = 65_536;
+export const AGRITECH_PROFILES_ROOT_DEFAULT = './profiles';

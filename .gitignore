@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+data/runs/
+data/url-content-index.json
+data/section-snapshots.json
+*.xlsx
