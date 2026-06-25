@@ -96,9 +96,6 @@ export class RunContext {
     readonly startedAt: string;
     readonly rows: StartupNewsRow[] = [];
     readonly seenEntryKeys = new Set<string>();
-    /** URLs with missing summaries in storage or failed prior extraction — re-process even if content unchanged. */
-    readonly urlsNeedingReextract = new Set<string>();
-    urlIndex: Map<string, { contentHash: string; lastSeenAt: string; lastRunId?: string; extractionComplete?: boolean }> = new Map();
     private sourceLogs = new Map<string, SourceRunLog>();
 
     constructor(runId: string, runDate: string, runDir: string, startedAt: string) {

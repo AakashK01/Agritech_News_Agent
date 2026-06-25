@@ -5,3 +5,9 @@ data/runs/
 data/url-content-index.json
 data/section-snapshots.json
 *.xlsx
+profiles/inc42/inc42-auth.json
+profiles/inc42/browser-data/
+
+# Personal demo notes (keep local, do not commit)
+DEMO_GUIDE.personal.md
+.env.local

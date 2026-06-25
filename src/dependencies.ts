@@ -13,8 +13,8 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Central orchestrator — one weekly scheduler runs all enabled crawl jobs sequentially
- * with a configurable delay between each job (default 20 minutes).
+ * Central orchestrator — one scheduler runs all enabled crawl jobs sequentially
+ * with a configurable delay between each job (Inc42 first, then AgFunder by default).
  */
 export class AgriTechJobsOrchestrator {
     private scheduler: JobScheduler | null = null;
@@ -74,7 +74,8 @@ export class AgriTechJobsOrchestrator {
     private async resolveEnabledJobs(): Promise<ICrawlJobManager[]> {
         const agfunder = await agritechContainer.get<AgfunderNewsJobManager>(SERVICE_NAMES.AGFUNDER_JOB_MANAGER);
         const inc42 = await agritechContainer.get<Inc42NewsJobManager>(SERVICE_NAMES.INC42_JOB_MANAGER);
-        return [agfunder, inc42].filter((j) => j.isEnabled());
+        // Inc42 runs first (browser login feed); AgFunder starts after JOB_STAGGER_DELAY_MS.
+        return [inc42, agfunder].filter((j) => j.isEnabled());
     }
 }
 

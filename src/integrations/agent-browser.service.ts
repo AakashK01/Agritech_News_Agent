@@ -1,6 +1,9 @@
 import { spawn } from 'child_process';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { logger } from '../lib/logger';
 import type { AgriTechConfig } from '../config/app-config';
+import { INC42_AUTH_STATE_FILE } from '../constants/inc42-browser';
 import {
     BROWSER_ARGV_HARD_MAX_COUNT,
     BROWSER_ARG_STRING_HARD_MAX_BYTES,
@@ -19,6 +22,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 const SNAPSHOT_WITH_URLS_ARGS = ['--urls'] as const;
+const SNAPSHOT_INTERACTIVE_ARGS = ['-i', '--urls'] as const;
 
 export class AgentBrowserService {
     private readonly cliJsPath: string;
@@ -88,6 +92,22 @@ export class AgentBrowserService {
     }
 
     async ensureSessionReady(sessionId: string, profileCwd: string): Promise<void> {
+        const authStatePath = path.join(profileCwd, INC42_AUTH_STATE_FILE);
+        try {
+            await fs.access(authStatePath);
+            logger.debug('Loading saved auth state before crawl', { authStatePath });
+            const loadRes = await this.invoke(sessionId, profileCwd, ['state', 'load', INC42_AUTH_STATE_FILE]);
+            if (loadRes.code !== 0) {
+                throw new Error(`agent-browser state load failed: ${loadRes.stderr.slice(0, 400)}`);
+            }
+            return;
+        } catch (err) {
+            if (err instanceof Error && err.message.startsWith('agent-browser state load failed')) {
+                throw err;
+            }
+            // No saved auth state; warm up browser with about:blank as before.
+        }
+
         const deadline = Date.now() + this.config.BROWSER_READY_TIMEOUT_MS;
         let attempt = 0;
         while (Date.now() < deadline) {
@@ -138,6 +158,20 @@ export class AgentBrowserService {
         return res.stdout;
     }
 
+    /** Viewport/interactive elements only — use for visibility checks, not link extraction. */
+    async snapshotInteractive(sessionId: string, profileCwd: string): Promise<string> {
+        const res = await this.invoke(sessionId, profileCwd, ['snapshot', ...SNAPSHOT_INTERACTIVE_ARGS]);
+        if (res.code !== 0) {
+            throw new Error(`agent-browser interactive snapshot failed: ${res.stderr.slice(0, 400)}`);
+        }
+        return res.stdout;
+    }
+
+    async snapshotContainsVisibleText(sessionId: string, profileCwd: string, text: string): Promise<boolean> {
+        const snapshot = await this.snapshotInteractive(sessionId, profileCwd);
+        return this.snapshotContainsText(snapshot, text);
+    }
+
     async scrollDown(sessionId: string, profileCwd: string, pixels: number, selector?: string): Promise<void> {
         const px = Math.max(1, Math.floor(pixels));
         const args = ['scroll', 'down', String(px)];
@@ -148,6 +182,50 @@ export class AgentBrowserService {
         if (res.code !== 0) {
             throw new Error(`agent-browser scroll failed: ${res.stderr.slice(0, 400)}`);
         }
+    }
+
+    async scrollUp(sessionId: string, profileCwd: string, pixels: number, selector?: string): Promise<void> {
+        const px = Math.max(1, Math.floor(pixels));
+        const args = ['scroll', 'up', String(px)];
+        if (selector !== undefined && selector.trim().length > 0) {
+            args.push('--selector', selector.trim());
+        }
+        const res = await this.invoke(sessionId, profileCwd, args);
+        if (res.code !== 0) {
+            throw new Error(`agent-browser scroll up failed: ${res.stderr.slice(0, 400)}`);
+        }
+    }
+
+    async scrollToTop(sessionId: string, profileCwd: string): Promise<void> {
+        for (let i = 0; i < 5; i++) {
+            await this.scrollUp(sessionId, profileCwd, 3000);
+            await this.waitMs(sessionId, profileCwd, 200);
+        }
+    }
+
+    /**
+     * Scroll down until label text appears in the interactive (viewport) snapshot.
+     * Returns true if the text was found, including on the first check without scrolling.
+     */
+    async scrollUntilTextVisible(
+        sessionId: string,
+        profileCwd: string,
+        text: string,
+        maxSteps: number,
+        stepPx: number,
+        settleMs: number,
+    ): Promise<boolean> {
+        for (let step = 0; step <= maxSteps; step++) {
+            if (await this.snapshotContainsVisibleText(sessionId, profileCwd, text)) {
+                return true;
+            }
+            if (step >= maxSteps) {
+                break;
+            }
+            await this.scrollDown(sessionId, profileCwd, stepPx);
+            await this.waitMs(sessionId, profileCwd, settleMs);
+        }
+        return false;
     }
 
     async waitMs(sessionId: string, profileCwd: string, ms: number): Promise<void> {
@@ -165,5 +243,22 @@ export class AgentBrowserService {
         if (res.code !== 0) {
             throw new Error(`agent-browser close failed: ${res.stderr.slice(0, 400)}`);
         }
+    }
+
+    /** Click an element by its visible text label, then wait for the page to settle. */
+    async clickByText(sessionId: string, profileCwd: string, text: string): Promise<void> {
+        const res = await this.invoke(sessionId, profileCwd, ['find', 'text', text, 'click']);
+        if (res.code !== 0) {
+            throw new Error(`agent-browser click failed: ${res.stderr.slice(0, 400)}`);
+        }
+        const waitRes = await this.invoke(sessionId, profileCwd, ['wait', '--load', 'networkidle']);
+        if (waitRes.code !== 0) {
+            logger.warn('agent-browser wait after click non-zero; continuing', { code: waitRes.code });
+        }
+    }
+
+    /** Returns true if the given label text appears anywhere in the snapshot string. */
+    snapshotContainsText(snapshot: string, label: string): boolean {
+        return snapshot.toLowerCase().includes(label.toLowerCase());
     }
 }

@@ -46,7 +46,7 @@ const AgriTechConfigSchema = z
         AGRITECH_BROWSER_FALLBACK_ENABLED: boolFromEnv('false'),
 
         AGRITECH_AGFUNDER_ENABLED:      boolFromEnv('true'),
-        AGRITECH_INC42_ENABLED:         boolFromEnv('false'),
+        AGRITECH_INC42_ENABLED:         boolFromEnv('true'),
         AGRITECH_INC42_BROWSER_ENABLED: boolFromEnv('true'),
         AGRITECH_DEFAULT_INTERVAL_MS:   z.coerce.number().int().positive().default(AGRITECH_DEFAULT_INTERVAL_MS_DEFAULT),
         JOB_STAGGER_DELAY_MS:            z.coerce.number().int().nonnegative().default(JOB_STAGGER_DELAY_MS_DEFAULT),

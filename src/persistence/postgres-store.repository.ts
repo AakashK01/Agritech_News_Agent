@@ -1,6 +1,5 @@
 import { executeQuery } from '../db/index';
 import type { StartupNewsRow } from '../domain/types';
-import type { SectionSnapshotMap } from './section-snapshot.service';
 
 const UPSERT_NEWS_SQL = `
 INSERT INTO agritech.news (
@@ -16,41 +15,30 @@ ON CONFLICT (entry_key) DO UPDATE SET
   discovered_at = EXCLUDED.discovered_at
 `;
 
-const UPSERT_SECTION_SQL = `
-INSERT INTO agritech.section_snapshot (section_url, content_hash, checked_at)
-VALUES ($1, $2, now())
-ON CONFLICT (section_url) DO UPDATE SET
-  content_hash = EXCLUDED.content_hash,
-  checked_at = now()
+const INSERT_LOG_SQL = `
+INSERT INTO agritech.logs (run_id, source_id, event, url, reason, entry_key, meta)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `;
 
-const LOAD_INCOMPLETE_NEWS_SQL = `
-SELECT source_url
-FROM agritech.news
-WHERE news_summary IS NULL OR TRIM(news_summary) = ''
+const FILTER_KNOWN_URLS_SQL = `
+SELECT source_url FROM agritech.news WHERE source_url = ANY($1)
 `;
 
-const LOAD_SECTIONS_SQL = `
-SELECT section_url, content_hash, checked_at
-FROM agritech.section_snapshot
-`;
-
-interface SectionRow {
-    section_url: string;
-    content_hash: string;
-    checked_at: Date;
-}
-
-interface IncompleteNewsRow {
+interface KnownUrlRow {
     source_url: string;
 }
 
-export class PostgresStore {
-    async loadIncompleteNewsUrls(): Promise<string[]> {
-        const result = await executeQuery<IncompleteNewsRow>(LOAD_INCOMPLETE_NEWS_SQL);
-        return result.rows.map((row) => row.source_url);
-    }
+export interface LogEntry {
+    runId: string;
+    sourceId: string;
+    event: 'new' | 'updated' | 'skipped' | 'not_relevant' | 'error' | 'run_complete';
+    url?: string | null;
+    reason?: string | null;
+    entryKey?: string | null;
+    meta?: Record<string, unknown> | null;
+}
 
+export class PostgresStore {
     async upsertNews(rows: StartupNewsRow[]): Promise<number> {
         if (rows.length === 0) {
             return 0;
@@ -71,21 +59,25 @@ export class PostgresStore {
         return rows.length;
     }
 
-    async loadSectionSnapshots(): Promise<SectionSnapshotMap> {
-        const result = await executeQuery<SectionRow>(LOAD_SECTIONS_SQL);
-        const map: SectionSnapshotMap = new Map();
-        for (const row of result.rows) {
-            map.set(row.section_url, {
-                contentHash: row.content_hash,
-                lastCheckedAt: row.checked_at.toISOString(),
-            });
+    /** Returns only URLs from the input that are NOT already in agritech.news. */
+    async filterKnownUrls(urls: string[]): Promise<string[]> {
+        if (urls.length === 0) {
+            return [];
         }
-        return map;
+        const result = await executeQuery<KnownUrlRow>(FILTER_KNOWN_URLS_SQL, [urls]);
+        const known = new Set(result.rows.map((r) => r.source_url));
+        return urls.filter((u) => !known.has(u));
     }
 
-    async saveSectionSnapshots(snapshots: SectionSnapshotMap): Promise<void> {
-        for (const [sectionUrl, rec] of snapshots.entries()) {
-            await executeQuery(UPSERT_SECTION_SQL, [sectionUrl, rec.contentHash]);
-        }
+    async insertLog(entry: LogEntry): Promise<void> {
+        await executeQuery(INSERT_LOG_SQL, [
+            entry.runId,
+            entry.sourceId,
+            entry.event,
+            entry.url ?? null,
+            entry.reason ?? null,
+            entry.entryKey ?? null,
+            entry.meta ? JSON.stringify(entry.meta) : null,
+        ]);
     }
 }

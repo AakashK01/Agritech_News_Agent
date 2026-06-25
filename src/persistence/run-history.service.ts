@@ -1,14 +1,9 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import type { AgriTechConfig } from '../config/app-config';
 import type { StartupNewsRow } from '../domain/types';
 import { buildRunDate, buildRunId, RunContext } from '../domain/run-context';
-import type { SourceRunLog, SourceRunStats } from '../domain/run-context';
-import type { PostgresStore } from './postgres-store.repository';
+import type { SourceRunStats } from '../domain/run-context';
+import type { PostgresStore, LogEntry } from './postgres-store.repository';
 import { ExcelStoreService } from './excel-store.service';
-import type { SectionSnapshotMap } from './section-snapshot.service';
-import { SectionSnapshotService } from './section-snapshot.service';
-import { UrlContentIndexService } from './url-content-index.service';
 
 export interface RunSummary {
     runId: string;
@@ -25,8 +20,6 @@ export class RunHistoryService {
     constructor(
         private readonly config: AgriTechConfig,
         private readonly excelStore: ExcelStoreService,
-        private readonly urlIndexService: UrlContentIndexService,
-        private readonly sectionSnapshotService: SectionSnapshotService,
         private readonly postgres: PostgresStore | null,
     ) {}
 
@@ -34,28 +27,27 @@ export class RunHistoryService {
         const now = new Date();
         const runId = buildRunId(now);
         const runDate = buildRunDate(now);
-        const runDir = path.resolve(process.cwd(), this.config.AGRITECH_RUNS_DIR, runDate);
+        const runDir = `${this.config.AGRITECH_RUNS_DIR}/${runDate}`;
         return new RunContext(runId, runDate, runDir, now.toISOString());
     }
 
-    async prepareRun(ctx: RunContext): Promise<void> {
-        ctx.urlIndex = await this.urlIndexService.load();
-
-        for (const [url, rec] of ctx.urlIndex.entries()) {
-            if (rec.extractionComplete === false) {
-                ctx.urlsNeedingReextract.add(url);
-            }
+    /** Logs an article-level event to agritech.logs. No-op when Postgres is disabled. */
+    async logEvent(
+        ctx: RunContext,
+        sourceId: string,
+        entry: Omit<LogEntry, 'runId' | 'sourceId'>,
+    ): Promise<void> {
+        if (!this.postgres) {
+            return;
         }
-
-        if (this.config.AGRITECH_POSTGRES_ENABLED && this.postgres) {
-            const incomplete = await this.postgres.loadIncompleteNewsUrls();
-            for (const url of incomplete) {
-                ctx.urlsNeedingReextract.add(url);
-            }
-        }
+        await this.postgres.insertLog({ runId: ctx.runId, sourceId, ...entry }).catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            // Non-fatal — logging errors must not abort the crawl
+            console.warn(`[RunHistoryService] insertLog failed: ${msg}`);
+        });
     }
 
-    async completeRun(ctx: RunContext, sectionSnapshots: SectionSnapshotMap): Promise<RunSummary> {
+    async completeRun(ctx: RunContext): Promise<RunSummary> {
         const startedAt = ctx.startedAt;
         const completedAt = new Date().toISOString();
 
@@ -68,26 +60,14 @@ export class RunHistoryService {
             await this.postgres.upsertNews(ctx.rows);
         }
 
-        await this.urlIndexService.persist(ctx.urlIndex);
-        await this.sectionSnapshotService.persist(sectionSnapshots);
-
-        const logsDir = path.join(ctx.runDir, 'logs');
-        await fs.mkdir(logsDir, { recursive: true });
-
         const sourceSummaries: Array<{ id: string } & SourceRunStats> = [];
         let totals: SourceRunStats = emptyStats();
-        const unifiedLog: Array<Record<string, unknown>> = [];
 
         for (const [sourceId, log] of ctx.iterateSourceLogs()) {
             const counts = log.counts();
             sourceSummaries.push({ id: sourceId, ...counts });
             totals = mergeStats(totals, counts);
-            for (const entry of log.entries) {
-                unifiedLog.push({ sourceId, ...entry });
-            }
         }
-
-        await fs.writeFile(path.join(logsDir, 'crawl.json'), JSON.stringify(unifiedLog, null, 2), 'utf8');
 
         const summary: RunSummary = {
             runId: ctx.runId,
@@ -103,7 +83,18 @@ export class RunHistoryService {
             sources: sourceSummaries,
         };
 
-        await fs.writeFile(path.join(ctx.runDir, 'run-summary.json'), JSON.stringify(summary, null, 2), 'utf8');
+        if (this.postgres) {
+            await this.postgres.insertLog({
+                runId: ctx.runId,
+                sourceId: 'orchestrator',
+                event: 'run_complete',
+                meta: summary as unknown as Record<string, unknown>,
+            }).catch((err: unknown) => {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.warn(`[RunHistoryService] run_complete log failed: ${msg}`);
+            });
+        }
+
         return summary;
     }
 }

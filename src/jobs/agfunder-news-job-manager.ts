@@ -4,7 +4,6 @@ import { AgfunderNewsFragment } from '../fragments/agfunder-news-fragment';
 import type { PageFetchService } from '../integrations/page-fetch.service';
 import type { IStartupNewsExtractor } from '../domain/types';
 import type { RunHistoryService } from '../persistence/run-history.service';
-import type { SectionSnapshotService } from '../persistence/section-snapshot.service';
 import type { ICrawlJobManager } from './crawl-job-manager.interface';
 
 export class AgfunderNewsJobManager implements ICrawlJobManager {
@@ -15,7 +14,6 @@ export class AgfunderNewsJobManager implements ICrawlJobManager {
         private readonly pageFetch: PageFetchService,
         private readonly extractor: IStartupNewsExtractor | null,
         private readonly runHistory: RunHistoryService,
-        private readonly sectionSnapshots: SectionSnapshotService,
     ) {}
 
     isEnabled(): boolean {
@@ -37,7 +35,6 @@ export class AgfunderNewsJobManager implements ICrawlJobManager {
             this.pageFetch,
             this.extractor,
             this.runHistory,
-            this.sectionSnapshots,
         );
     }
 }

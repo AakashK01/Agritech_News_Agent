@@ -4,8 +4,6 @@ export const SERVICE_NAMES = {
     AGENT_BROWSER: 'agentBrowser',
     PAGE_FETCH: 'pageFetch',
     STARTUP_EXTRACTOR: 'startupExtractor',
-    URL_CONTENT_INDEX: 'urlContentIndex',
-    SECTION_SNAPSHOTS: 'sectionSnapshots',
     EXCEL_STORE: 'excelStore',
     POSTGRES_STORE: 'postgresStore',
     RUN_HISTORY: 'runHistory',

@@ -4,8 +4,16 @@ import pg from 'pg';
 
 const { Client } = pg;
 
-const migrationPath = path.join(process.cwd(), 'db/migrations/001_agritech_schema.sql');
-const sql = fs.readFileSync(migrationPath, 'utf8');
+const migrationsDir = path.join(process.cwd(), 'db/migrations');
+const migrationFiles = fs
+  .readdirSync(migrationsDir)
+  .filter((name) => name.endsWith('.sql'))
+  .sort();
+
+if (migrationFiles.length === 0) {
+  console.error('No migration files found in', migrationsDir);
+  process.exit(1);
+}
 
 const client = new Client({
   host: process.env.DB_HOST ?? 'localhost',
@@ -16,6 +24,12 @@ const client = new Client({
 });
 
 await client.connect();
-await client.query(sql);
+
+for (const file of migrationFiles) {
+  const migrationPath = path.join(migrationsDir, file);
+  const sql = fs.readFileSync(migrationPath, 'utf8');
+  await client.query(sql);
+  console.log('Migration applied:', migrationPath);
+}
+
 await client.end();
-console.log('Migration applied:', migrationPath);

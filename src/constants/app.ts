@@ -9,8 +9,8 @@ export const RUNS_DIR_DEFAULT = './data/runs';
 export const URL_CONTENT_INDEX_PATH_DEFAULT = './data/url-content-index.json';
 export const SECTION_SNAPSHOTS_PATH_DEFAULT = './data/section-snapshots.json';
 export const AGRITECH_DEFAULT_INTERVAL_MS_DEFAULT = 604_800_000;
-/** Default pause between sequential jobs in one orchestrator cycle (20 minutes). */
-export const JOB_STAGGER_DELAY_MS_DEFAULT = 1_200_000;
+/** Default pause between sequential jobs in one orchestrator cycle (2 minutes). Inc42 → AgFunder. */
+export const JOB_STAGGER_DELAY_MS_DEFAULT = 120_000;
 export const AGRITECH_POSTGRES_SCHEMA_DEFAULT = 'agritech';
 
 export const NEWS_ENTRY_KEY_PREFIX = 'agritech.news';

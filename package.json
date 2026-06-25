@@ -8,6 +8,7 @@
     "start": "node dist/index.js",
     "dev": "nodemon",
     "dev:once": "AGRITECH_RUN_ONCE=true ts-node src/index.ts",
+    "inc42:login": "bash scripts/inc42-login.sh",
     "test": "jest",
     "db:migrate": "node --env-file=.env scripts/run-migration.mjs"
   },

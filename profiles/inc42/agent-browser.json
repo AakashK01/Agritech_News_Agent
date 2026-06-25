@@ -1,5 +1,6 @@
 {
   "headed": true,
-  "profile": "./browser-data",
-  "executablePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  "state": "./inc42-auth.json",
+  "executablePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "args": "--disable-blink-features=AutomationControlled,--exclude-switches=enable-automation"
 }

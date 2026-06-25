@@ -2,10 +2,9 @@ import { logger } from '../lib/logger';
 import type { AgriTechConfig } from '../config/app-config';
 import { Inc42NewsFragment } from '../fragments/inc42-news-fragment';
 import type { Inc42BrowserListingService } from '../integrations/inc42-browser-listing.service';
-import type { PageFetchService } from '../integrations/page-fetch.service';
+import type { AgentBrowserService } from '../integrations/agent-browser.service';
 import type { IStartupNewsExtractor } from '../domain/types';
 import type { RunHistoryService } from '../persistence/run-history.service';
-import type { SectionSnapshotService } from '../persistence/section-snapshot.service';
 import type { ICrawlJobManager } from './crawl-job-manager.interface';
 
 export class Inc42NewsJobManager implements ICrawlJobManager {
@@ -13,11 +12,10 @@ export class Inc42NewsJobManager implements ICrawlJobManager {
 
     constructor(
         private readonly appConfig: AgriTechConfig,
-        private readonly pageFetch: PageFetchService,
+        private readonly agentBrowser: AgentBrowserService,
         private readonly browserListing: Inc42BrowserListingService | null,
         private readonly extractor: IStartupNewsExtractor | null,
         private readonly runHistory: RunHistoryService,
-        private readonly sectionSnapshots: SectionSnapshotService,
     ) {}
 
     isEnabled(): boolean {
@@ -36,11 +34,10 @@ export class Inc42NewsJobManager implements ICrawlJobManager {
         return new Inc42NewsFragment(
             id,
             this.appConfig,
-            this.pageFetch,
+            this.agentBrowser,
             this.browserListing,
             this.extractor,
             this.runHistory,
-            this.sectionSnapshots,
         );
     }
 }
