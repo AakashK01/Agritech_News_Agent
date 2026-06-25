@@ -93,11 +93,11 @@ Follow the prompts:
 
 1. Chrome opens the Inc42 agritech feed.
 2. Sign in with Google when prompted.
-3. Wait until article listings appear (not a login wall).
-4. Press **Enter** in the terminal — the script saves `profiles/inc42/inc42-auth.json`.
+3. **Close any extra tabs** (e.g. Gemini) and stay on the Inc42 feed until listings appear.
+4. Press **Enter** in the terminal — the script focuses the Inc42 tab and saves `profiles/inc42/inc42-auth.json` (no new tabs opened).
 5. Quit Chrome completely (**Cmd+Q**).
 
-The script validates that WordPress login cookies and origin storage were captured before saving.
+The script validates `wordpress_logged_in` and `inc42.com` cookies before saving. A bad save is deleted automatically.
 
 ### 6. Start the tracker
 

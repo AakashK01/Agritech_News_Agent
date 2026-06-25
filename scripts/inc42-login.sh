@@ -8,10 +8,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROFILE_DIR="$ROOT/profiles/inc42"
 PROFILE="$PROFILE_DIR/browser-data"
 AUTH_STATE="$PROFILE_DIR/inc42-auth.json"
+SAVE_AUTH="$ROOT/scripts/inc42-save-auth.mjs"
 CHROME="${CHROME_PATH:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
 DEBUG_PORT="${INC42_DEBUG_PORT:-9222}"
 LOGIN_URL="${INC42_LOGIN_URL:-https://inc42.com/industry/agritech/}"
-AGENT_BROWSER="$ROOT/node_modules/agent-browser/bin/agent-browser.js"
 
 if [[ ! -x "$CHROME" ]]; then
   echo "Chrome not found at: $CHROME" >&2
@@ -19,7 +19,7 @@ if [[ ! -x "$CHROME" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$AGENT_BROWSER" ]]; then
+if [[ ! -f "$ROOT/node_modules/agent-browser/bin/agent-browser.js" ]]; then
   echo "agent-browser not found — run: npm install" >&2
   exit 1
 fi
@@ -33,11 +33,13 @@ echo "Opening Inc42 in Chrome with remote debugging (port $DEBUG_PORT)."
 echo "Profile: $PROFILE"
 echo ""
 echo "1. Sign in with Google when prompted."
-echo "2. Confirm the agritech feed shows article listings (not a login wall)."
-echo "3. Press Enter here to save the session for npm run dev."
+echo "2. Stay on the Inc42 agritech feed tab — close any extra tabs (e.g. Gemini)."
+echo "3. Click the Inc42 tab so it is the active window before pressing Enter."
+echo "4. Confirm article listings are visible (not a login wall)."
+echo "5. Press Enter here to save the session for npm run dev."
 echo ""
-echo "Note: npm run dev opens a separate Chrome window. Auth comes from inc42-auth.json,"
-echo "      not the browser-data profile — that is expected."
+echo "Important: Close extra tabs (e.g. Gemini). The save step reads cookies from your Chrome session."
+echo "Note: npm run dev opens a separate Chrome window using inc42-auth.json."
 echo ""
 
 "$CHROME" \
@@ -49,55 +51,28 @@ echo ""
 
 CHROME_PID=$!
 
-cleanup() {
+cleanup_chrome() {
   if kill -0 "$CHROME_PID" 2>/dev/null; then
     kill "$CHROME_PID" 2>/dev/null || true
   fi
 }
-trap cleanup EXIT
 
 read -r -p "Press Enter after you are logged in and the feed loads... " _
 
 echo ""
-echo "Refreshing feed via CDP before saving auth state..."
+echo "Saving auth state via CDP (no agent-browser — no new tabs or windows)..."
 
-cd "$PROFILE_DIR"
-if ! node "$AGENT_BROWSER" --auto-connect open "$LOGIN_URL"; then
-  echo "Failed to open feed via CDP. Is Chrome still running on port $DEBUG_PORT?" >&2
+if ! node "$SAVE_AUTH" \
+  "$PROFILE_DIR" \
+  "$DEBUG_PORT" \
+  "./inc42-auth.json"; then
+  echo "" >&2
+  echo "Save failed — Chrome left open so you can fix the Inc42 tab and re-run: npm run inc42:login" >&2
   exit 1
 fi
 
-if ! node "$AGENT_BROWSER" --auto-connect wait --load networkidle; then
-  echo "Failed waiting for feed load via CDP." >&2
-  exit 1
-fi
-
-echo "Saving auth state to $AUTH_STATE ..."
-if ! node "$AGENT_BROWSER" --auto-connect state save ./inc42-auth.json; then
-  echo "Failed to save auth state. Is Chrome still running on port $DEBUG_PORT?" >&2
-  exit 1
-fi
-
-if ! node -e "
-const fs = require('fs');
-const state = JSON.parse(fs.readFileSync('$AUTH_STATE', 'utf8'));
-const cookies = state.cookies || [];
-const origins = state.origins || [];
-const hasWpLogin = cookies.some(c => String(c.name || '').startsWith('wordpress_logged_in'));
-if (!hasWpLogin) {
-  console.error('Saved state missing wordpress_logged_in cookie — sign in and try again.');
-  process.exit(1);
-}
-if (origins.length === 0) {
-  console.error('Saved state has no origin storage (localStorage). Auth may not persist in npm run dev.');
-  console.error('Ensure the agritech feed is loaded (not a login wall) before pressing Enter.');
-  process.exit(1);
-}
-console.log('Validated: ' + cookies.length + ' cookies, ' + origins.length + ' origin(s) with storage');
-"; then
-  exit 1
-fi
+cleanup_chrome
 
 echo ""
 echo "Session saved to profiles/inc42/inc42-auth.json"
-echo "Quit Chrome completely (Cmd+Q), then run: npm run dev"
+echo "Quit Chrome completely (Cmd+Q) if still open, then run: npm run dev"
