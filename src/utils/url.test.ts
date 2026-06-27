@@ -7,6 +7,12 @@ describe('url', () => {
             'https://agfundernews.com/foo',
         );
     });
+
+    it('normalizes www hostname', () => {
+        expect(canonicalizeSourceUrl('https://www.inc42.com/buzz/foo/')).toBe(
+            'https://inc42.com/buzz/foo',
+        );
+    });
 });
 
 describe('isAgfunderArticleUrl', () => {

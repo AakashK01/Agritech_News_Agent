@@ -49,8 +49,7 @@ export class AgriTechContainer {
             if (!agentBrowser) {
                 return null;
             }
-            const postgres = await c.get<PostgresStore | null>(SERVICE_NAMES.POSTGRES_STORE);
-            return new Inc42BrowserListingService(config, agentBrowser, postgres);
+            return new Inc42BrowserListingService(config, agentBrowser);
         });
 
         c.register(SERVICE_NAMES.PAGE_FETCH, async () => {

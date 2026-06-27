@@ -3,13 +3,18 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { logger } from '../lib/logger';
 import type { AgriTechConfig } from '../config/app-config';
-import { INC42_AUTH_STATE_FILE } from '../constants/inc42-browser';
+import {
+    INC42_ARTICLE_SETTLE_MS,
+    INC42_AUTH_STATE_FILE,
+    INC42_READ_MORE_SETTLE_MS,
+} from '../constants/inc42-browser';
 import {
     BROWSER_ARGV_HARD_MAX_COUNT,
     BROWSER_ARG_STRING_HARD_MAX_BYTES,
 } from '../constants/browser';
 import { resolveAgentBrowserJs } from './agent-browser.paths';
 import type { ProfileLockService } from './profile-lock.service';
+import { extractInteractiveRefForQuotedText } from '../parsers/inc42-snapshot.parser';
 
 export interface InvokeResult {
     code: number | null;
@@ -238,11 +243,142 @@ export class AgentBrowserService {
         }
     }
 
+    async pressKey(sessionId: string, profileCwd: string, key: string): Promise<void> {
+        const res = await this.invoke(sessionId, profileCwd, ['press', key]);
+        if (res.code !== 0) {
+            throw new Error(`agent-browser press failed: ${res.stderr.slice(0, 400)}`);
+        }
+    }
+
+    /** Click by visible text without waiting for networkidle (Inc42 SPA buttons). */
+    async clickByTextWithoutNetworkIdle(
+        sessionId: string,
+        profileCwd: string,
+        text: string,
+        settleMs = 500,
+    ): Promise<void> {
+        const res = await this.invoke(sessionId, profileCwd, ['find', 'text', text, 'click']);
+        if (res.code !== 0) {
+            throw new Error(`agent-browser click failed: ${res.stderr.slice(0, 400)}`);
+        }
+        await this.waitMs(sessionId, profileCwd, settleMs);
+    }
+
+    /** Click Read More by @eN ref; falls back to text click if ref is missing. */
+    async clickReadMoreButton(
+        sessionId: string,
+        profileCwd: string,
+        interactiveSnapshot: string,
+        text: string,
+        settleMs = INC42_READ_MORE_SETTLE_MS,
+    ): Promise<void> {
+        const ref = extractInteractiveRefForQuotedText(interactiveSnapshot, text);
+        if (ref) {
+            const res = await this.invoke(sessionId, profileCwd, ['click', ref]);
+            if (res.code !== 0) {
+                logger.warn('Read More ref click failed — falling back to text click', {
+                    ref,
+                    stderr: res.stderr.slice(0, 200),
+                });
+                await this.clickByTextWithoutNetworkIdle(sessionId, profileCwd, text, settleMs);
+                return;
+            }
+            await this.waitMs(sessionId, profileCwd, settleMs);
+            return;
+        }
+        await this.clickByTextWithoutNetworkIdle(sessionId, profileCwd, text, settleMs);
+    }
+
     async closeSession(sessionId: string, profileCwd: string): Promise<void> {
         const res = await this.invoke(sessionId, profileCwd, ['close']);
         if (res.code !== 0) {
             throw new Error(`agent-browser close failed: ${res.stderr.slice(0, 400)}`);
         }
+    }
+
+    /** Open an article URL in a new tab, switch to it, and wait for the page to settle. */
+    async openArticleInNewTab(
+        sessionId: string,
+        profileCwd: string,
+        url: string,
+        settleMs = INC42_ARTICLE_SETTLE_MS,
+    ): Promise<void> {
+        const tabsBefore = await this.getTabCount(sessionId, profileCwd);
+        const res = await this.invoke(sessionId, profileCwd, ['tab', 'new', url]);
+        if (res.code !== 0) {
+            throw new Error(`agent-browser tab new failed: ${res.stderr.slice(0, 400)}`);
+        }
+
+        const tabsAfter = await this.getTabCount(sessionId, profileCwd);
+        if (tabsAfter > tabsBefore) {
+            await this.switchToTab(sessionId, profileCwd, tabsAfter - 1);
+        }
+
+        await this.waitMs(sessionId, profileCwd, settleMs);
+    }
+
+    /**
+     * Close the article tab without closing the listing tab.
+     * Never closes when only one tab remains — avoids killing the browser session.
+     */
+    async closeArticleTab(sessionId: string, profileCwd: string): Promise<void> {
+        const tabCount = await this.getTabCount(sessionId, profileCwd);
+        if (tabCount <= 1) {
+            return;
+        }
+
+        const articleTabIndex = tabCount - 1;
+        await this.switchToTab(sessionId, profileCwd, articleTabIndex);
+        const closeRes = await this.invoke(sessionId, profileCwd, ['tab', 'close']);
+        if (closeRes.code !== 0) {
+            logger.warn('agent-browser tab close failed — leaving session open', {
+                code: closeRes.code,
+                stderr: closeRes.stderr.slice(0, 200),
+            });
+            return;
+        }
+
+        await this.switchToTab(sessionId, profileCwd, 0).catch(() => undefined);
+    }
+
+    private async getTabCount(sessionId: string, profileCwd: string): Promise<number> {
+        const res = await this.invoke(sessionId, profileCwd, ['tab', 'list', '--json']);
+        if (res.code !== 0) {
+            return 1;
+        }
+
+        try {
+            const parsed = JSON.parse(res.stdout.trim()) as unknown;
+            if (Array.isArray(parsed)) {
+                return parsed.length;
+            }
+            if (parsed && typeof parsed === 'object') {
+                const tabs = (parsed as { tabs?: unknown[] }).tabs;
+                if (Array.isArray(tabs)) {
+                    return tabs.length;
+                }
+                const count = (parsed as { count?: number }).count;
+                if (typeof count === 'number' && count > 0) {
+                    return count;
+                }
+            }
+        } catch {
+            // Fall through to default.
+        }
+
+        return 1;
+    }
+
+    private async switchToTab(sessionId: string, profileCwd: string, index: number): Promise<void> {
+        const res = await this.invoke(sessionId, profileCwd, ['tab', String(index)]);
+        if (res.code !== 0) {
+            throw new Error(`agent-browser tab switch failed: ${res.stderr.slice(0, 400)}`);
+        }
+    }
+
+    /** @deprecated Use closeArticleTab — closing the only tab kills the browser. */
+    async closeCurrentTab(sessionId: string, profileCwd: string): Promise<void> {
+        await this.closeArticleTab(sessionId, profileCwd);
     }
 
     /** Click an element by its visible text label, then wait for the page to settle. */

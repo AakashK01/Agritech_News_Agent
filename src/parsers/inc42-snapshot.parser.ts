@@ -42,6 +42,15 @@ export function parseArticleFromSnapshot(
     return { title, bodyExcerpt };
 }
 
+/** True when snapshot parsing yielded a usable title and body for Ollama extraction. */
+export function isArticleSnapshotComplete(
+    title: string,
+    bodyExcerpt: string,
+    minBodyChars = 80,
+): boolean {
+    return title.trim().length > 0 && bodyExcerpt.trim().length >= minBodyChars;
+}
+
 function snapshotHasPaywallMarkers(snapshotYaml: string): boolean {
     const lower = snapshotYaml.toLowerCase();
     return (
@@ -107,4 +116,35 @@ export function isLatestNewsSectionAnchored(
 /** Stop further Read More clicks when the last click did not expand the link set. */
 export function shouldStopAfterReadMoreClick(linksBefore: number, linksAfter: number): boolean {
     return linksAfter <= linksBefore;
+}
+
+/**
+ * True when the Read More text appears as an exact quoted string in the interactive viewport
+ * snapshot. Accepts any a11y role — click success is validated by link count change.
+ */
+export function isReadMoreButtonVisibleInInteractiveSnapshot(
+    interactiveSnapshot: string,
+    readMoreText = 'Read More Stories',
+): boolean {
+    const escaped = readMoreText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`["']${escaped}["']`, 'i').test(interactiveSnapshot);
+}
+
+/** Extract @eN ref for a quoted label from an agent-browser interactive snapshot line. */
+export function extractInteractiveRefForQuotedText(
+    interactiveSnapshot: string,
+    text: string,
+): string | null {
+    const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const quotedPattern = new RegExp(`["']${escaped}["']`, 'i');
+    for (const line of interactiveSnapshot.split('\n')) {
+        if (!quotedPattern.test(line)) {
+            continue;
+        }
+        const refMatch = /@e\d+/.exec(line);
+        if (refMatch) {
+            return refMatch[0];
+        }
+    }
+    return null;
 }

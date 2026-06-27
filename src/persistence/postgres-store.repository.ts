@@ -1,5 +1,6 @@
 import { executeQuery } from '../db/index';
 import type { StartupNewsRow } from '../domain/types';
+import { canonicalizeSourceUrl } from '../utils/url';
 
 const UPSERT_NEWS_SQL = `
 INSERT INTO agritech.news (
@@ -64,9 +65,10 @@ export class PostgresStore {
         if (urls.length === 0) {
             return [];
         }
-        const result = await executeQuery<KnownUrlRow>(FILTER_KNOWN_URLS_SQL, [urls]);
-        const known = new Set(result.rows.map((r) => r.source_url));
-        return urls.filter((u) => !known.has(u));
+        const canonicalUrls = urls.map((u) => canonicalizeSourceUrl(u));
+        const result = await executeQuery<KnownUrlRow>(FILTER_KNOWN_URLS_SQL, [canonicalUrls]);
+        const known = new Set(result.rows.map((r) => canonicalizeSourceUrl(r.source_url)));
+        return urls.filter((u) => !known.has(canonicalizeSourceUrl(u)));
     }
 
     async insertLog(entry: LogEntry): Promise<void> {

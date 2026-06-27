@@ -31,6 +31,14 @@ export class RunHistoryService {
         return new RunContext(runId, runDate, runDir, now.toISOString());
     }
 
+    /** Returns URLs from the input that are not already stored in agritech.news. */
+    async filterFreshUrls(urls: string[]): Promise<string[]> {
+        if (!this.postgres) {
+            return urls;
+        }
+        return this.postgres.filterKnownUrls(urls);
+    }
+
     /** Logs an article-level event to agritech.logs. No-op when Postgres is disabled. */
     async logEvent(
         ctx: RunContext,

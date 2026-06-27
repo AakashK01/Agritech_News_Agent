@@ -3,7 +3,7 @@ export function canonicalizeSourceUrl(urlString: string): string {
     const u = new URL(urlString.trim());
     u.hash = '';
     u.search = '';
-    const host = u.hostname.toLowerCase();
+    const host = u.hostname.toLowerCase().replace(/^www\./, '');
     const pathname = u.pathname.replace(/\/+$/, '') || '/';
     return `${u.protocol}//${host}${pathname}`;
 }

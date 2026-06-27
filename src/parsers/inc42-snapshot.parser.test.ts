@@ -1,5 +1,8 @@
 import {
+    extractInteractiveRefForQuotedText,
+    isArticleSnapshotComplete,
     isLatestNewsSectionAnchored,
+    isReadMoreButtonVisibleInInteractiveSnapshot,
     mergeNewLinks,
     parseInc42ListingLinksFromSnapshot,
     shouldStopAfterReadMoreClick,
@@ -141,5 +144,57 @@ describe('shouldStopAfterReadMoreClick', () => {
 
     it('returns false when new links were added', () => {
         expect(shouldStopAfterReadMoreClick(6, 10)).toBe(false);
+    });
+});
+
+describe('isReadMoreButtonVisibleInInteractiveSnapshot', () => {
+    it('returns true for button role', () => {
+        const interactive = '@e9 [button] "Read More Stories"';
+        expect(isReadMoreButtonVisibleInInteractiveSnapshot(interactive)).toBe(true);
+    });
+
+    it('returns true for StaticText role', () => {
+        const interactive = '- StaticText "Read More Stories"';
+        expect(isReadMoreButtonVisibleInInteractiveSnapshot(interactive)).toBe(true);
+    });
+
+    it('returns false when text is absent', () => {
+        expect(isReadMoreButtonVisibleInInteractiveSnapshot('- link "Home"')).toBe(false);
+    });
+});
+
+describe('extractInteractiveRefForQuotedText', () => {
+    it('extracts ref from agent-browser snapshot line format', () => {
+        const interactive = '@e9 [button] "Read More Stories"';
+        expect(extractInteractiveRefForQuotedText(interactive, 'Read More Stories')).toBe('@e9');
+    });
+
+    it('extracts ref from indented snapshot line', () => {
+        const interactive = '  @e12 [link] "Read More Stories" url=https://inc42.com/';
+        expect(extractInteractiveRefForQuotedText(interactive, 'Read More Stories')).toBe('@e12');
+    });
+
+    it('extracts ref when it appears after the label on the same line', () => {
+        const interactive = '- button "Read More Stories" @e42';
+        expect(extractInteractiveRefForQuotedText(interactive, 'Read More Stories')).toBe('@e42');
+    });
+
+    it('returns null when ref not found', () => {
+        expect(extractInteractiveRefForQuotedText('- StaticText "Other"', 'Read More Stories')).toBeNull();
+    });
+});
+
+describe('isArticleSnapshotComplete', () => {
+    it('returns true when title and body meet minimum length', () => {
+        const body = 'a'.repeat(80);
+        expect(isArticleSnapshotComplete('Startup raises funding', body)).toBe(true);
+    });
+
+    it('returns false when title is empty', () => {
+        expect(isArticleSnapshotComplete('', 'a'.repeat(80))).toBe(false);
+    });
+
+    it('returns false when body is below minimum length', () => {
+        expect(isArticleSnapshotComplete('Title', 'short body')).toBe(false);
     });
 });
