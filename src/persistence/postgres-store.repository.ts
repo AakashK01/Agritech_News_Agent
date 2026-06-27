@@ -1,6 +1,8 @@
 import { executeQuery } from '../db/index';
-import type { StartupNewsRow } from '../domain/types';
+import type { CrawlLogEntry, StartupNewsRow } from '../domain/types';
 import { canonicalizeSourceUrl } from '../utils/url';
+
+export type LogEntry = CrawlLogEntry;
 
 const UPSERT_NEWS_SQL = `
 INSERT INTO agritech.news (
@@ -27,16 +29,6 @@ SELECT source_url FROM agritech.news WHERE source_url = ANY($1)
 
 interface KnownUrlRow {
     source_url: string;
-}
-
-export interface LogEntry {
-    runId: string;
-    sourceId: string;
-    event: 'new' | 'updated' | 'skipped' | 'not_relevant' | 'error' | 'run_complete';
-    url?: string | null;
-    reason?: string | null;
-    entryKey?: string | null;
-    meta?: Record<string, unknown> | null;
 }
 
 export class PostgresStore {

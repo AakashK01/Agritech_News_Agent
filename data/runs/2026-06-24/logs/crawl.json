@@ -1,0 +1,128 @@
+[
+  {
+    "sourceId": "inc42",
+    "url": "https://inc42.com/features/indian-unicorn-tracker-funding-investors-revenue-and-more",
+    "action": "updated",
+    "at": "2026-06-24T08:28:07.304Z",
+    "entryKey": "9ea2a3d1b5c7997436dfb0c3970720e5"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://inc42.com/features/india-wants-its-ai-talent-back-but-whats-the-incentive",
+    "action": "error",
+    "at": "2026-06-24T08:28:16.721Z",
+    "reason": "incomplete_extraction"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://inc42.com/features/the-battle-for-indias-kirana-stores-has-begun",
+    "action": "error",
+    "at": "2026-06-24T08:28:25.560Z",
+    "reason": "incomplete_extraction"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://inc42.com/buzz/sebis-garuda-framework-eases-key-bottlenecks-for-indian-startup-investors",
+    "action": "updated",
+    "at": "2026-06-24T08:28:34.561Z",
+    "entryKey": "a39b1c9ca02d8ab11f14fd578f5213b9"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://inc42.com/startups/how-startups-are-rebuilding-their-cloud-stack-for-profitability-scale",
+    "action": "updated",
+    "at": "2026-06-24T08:28:43.688Z",
+    "entryKey": "e946a903fa78fc76db667e47d1d02ffb"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://inc42.com/features/indian-startup-ipo-tracker-2026",
+    "action": "error",
+    "at": "2026-06-24T08:28:58.339Z",
+    "reason": "incomplete_extraction"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://inc42.com/buzz/market-scorecard-18-startups-raised-inr-41k-cr-via-ipos-in-2025",
+    "action": "error",
+    "at": "2026-06-24T08:29:06.130Z",
+    "reason": "incomplete_extraction"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://inc42.com/features/india-wants-its-ai-talent-back-but-whats-the-incentive",
+    "action": "skipped",
+    "at": "2026-06-24T08:29:08.719Z",
+    "reason": "duplicate_in_run"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://inc42.com/industry/agritech/",
+    "action": "error",
+    "at": "2026-06-24T08:29:47.877Z",
+    "reason": "section_fetch: inc42_login_required — open profiles/inc42 in headed mode and sign in manually"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://agfundernews.com/cultivated-meat-deep-dive-after-the-crash-whos-still-standing",
+    "action": "updated",
+    "at": "2026-06-24T08:29:51.767Z",
+    "entryKey": "ccb7270b1ee80278b806f9d47699795c"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://agfundernews.com/from-taxol-to-cocoa-can-plant-cell-culture-make-the-leap-from-drugs-to-food",
+    "action": "updated",
+    "at": "2026-06-24T08:29:54.623Z",
+    "entryKey": "158407f110a663f238bd18ee7066cfff"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://agfundernews.com/ai-is-everywhere-in-cpg-rd-but-is-it-moving-the-needle-turing-labs-surveys-the-biggest-players",
+    "action": "error",
+    "at": "2026-06-24T08:29:57.894Z",
+    "reason": "incomplete_extraction"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://agfundernews.com/agrifood-signals-eif-commits-29m-to-irish-agrifoodtech-aphea-bio-and-bayer-team-up-glp-1-pills",
+    "action": "updated",
+    "at": "2026-06-24T08:30:00.988Z",
+    "entryKey": "237a4b8babc4763cd547095b4a048019"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://agfundernews.com/uks-first-public-private-nature-fund-raises-86m-to-restore-landscapes-at-scale",
+    "action": "error",
+    "at": "2026-06-24T08:30:03.879Z",
+    "reason": "incomplete_extraction"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://inc42.com/features/india-wants-its-ai-talent-back-but-whats-the-incentive",
+    "action": "skipped",
+    "at": "2026-06-24T08:30:04.362Z",
+    "reason": "duplicate_in_run"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://inc42.com/features/the-battle-for-indias-kirana-stores-has-begun",
+    "action": "skipped",
+    "at": "2026-06-24T08:30:04.577Z",
+    "reason": "duplicate_in_run"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://inc42.com/features/indian-startup-ipo-tracker-2026",
+    "action": "skipped",
+    "at": "2026-06-24T08:30:04.781Z",
+    "reason": "duplicate_in_run"
+  },
+  {
+    "sourceId": "inc42",
+    "url": "https://inc42.com/buzz/market-scorecard-18-startups-raised-inr-41k-cr-via-ipos-in-2025",
+    "action": "skipped",
+    "at": "2026-06-24T08:30:04.954Z",
+    "reason": "duplicate_in_run"
+  }
+]

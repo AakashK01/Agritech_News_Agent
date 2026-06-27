@@ -170,14 +170,14 @@ Ollama returns JSON:
 
 ## Persistence model
 
-Two Postgres tables (optional Excel mirror):
+Postgres and Excel mirror the same two datasets:
 
-| Table | Key | Purpose |
+| Store | Key / behavior | Purpose |
 |---|---|---|
-| `agritech.news` | `entry_key` | Startup rows from all sources |
-| `agritech.section_snapshot` | `section_url` | Listing page hashes |
+| `agritech.news` / `agritech-news.xlsx` | `entry_key` (upsert) | Startup rows from all sources |
+| `agritech.logs` / `agritech-logs.xlsx` | append-only | Per-article crawl events + `run_complete` |
 
-File indexes mirror the same concepts for non-Postgres deployments.
+When both backends are enabled, each run upserts news and appends logs to Postgres and the two Excel files in parallel.
 
 ## Clean code practices in this codebase
 
@@ -185,7 +185,7 @@ File indexes mirror the same concepts for non-Postgres deployments.
 2. **No magic strings in logic** — literals live in `constants/`
 3. **Pure domain helpers** — `dedup.ts`, `extraction.ts` have no I/O
 4. **Explicit config** — Zod-validated env in `app-config.ts`; defaults in `constants/app.ts`
-5. **Fail visibly** — crawl actions logged to `logs/crawl.json` with reasons (`skipped`, `error`, `not_relevant`)
+5. **Fail visibly** — crawl actions logged to `agritech.logs` / `agritech-logs.xlsx` with reasons (`skipped`, `error`, `not_relevant`)
 6. **Minimal scope changes** — shared abstractions only where two sources already need them (`ICrawlJobManager`, parser interfaces)
 7. **Tests on pure logic** — parsers, dedup, extraction validation, JSON parsing
 

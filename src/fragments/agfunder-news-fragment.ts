@@ -56,7 +56,7 @@ export class AgfunderNewsFragment extends BaseFragment {
             runId: ctx.runId,
             newRows: summary.totals.new,
             updatedRows: summary.totals.updated,
-            excelPath: summary.excelPath,
+            excelPaths: summary.excelPaths,
         });
     }
 

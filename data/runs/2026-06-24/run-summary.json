@@ -1,0 +1,36 @@
+{
+  "runId": "2026-06-24T08-27-49-321Z",
+  "runDate": "2026-06-24",
+  "startedAt": "2026-06-24T08:27:49.321Z",
+  "completedAt": "2026-06-24T08:30:04.954Z",
+  "storage": {
+    "excel": true,
+    "postgres": true
+  },
+  "excelPath": "/Users/aakashk/Agritech_News_Agent/data/runs/2026-06-24/agritech-startups.xlsx",
+  "totals": {
+    "sectionsChecked": 3,
+    "sectionsSkipped": 0,
+    "articlesScanned": 17,
+    "new": 0,
+    "updated": 6,
+    "skipped": 5,
+    "notRelevant": 0,
+    "errors": 7,
+    "durationMs": 135643
+  },
+  "sources": [
+    {
+      "id": "inc42",
+      "sectionsChecked": 3,
+      "sectionsSkipped": 0,
+      "articlesScanned": 17,
+      "new": 0,
+      "updated": 6,
+      "skipped": 5,
+      "notRelevant": 0,
+      "errors": 7,
+      "durationMs": 135643
+    }
+  ]
+}

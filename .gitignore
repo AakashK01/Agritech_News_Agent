@@ -1,10 +1,11 @@
 node_modules/
 dist/
 .env
-data/runs/
-data/url-content-index.json
-data/section-snapshots.json
-*.xlsx
+
+# Interview demo outputs (local only — mirrors Postgres)
+data/agritech-news.xlsx
+data/agritech-logs.xlsx
+
 profiles/inc42/inc42-auth.json
 profiles/inc42/browser-data/
 

@@ -9,7 +9,7 @@ Automated discovery of agrifood and agtech startups from news sources. The track
 1. **Crawl** — fetches listing pages from news sources (HTTP or headed browser for login-gated feeds)
 2. **Detect changes** — skips unchanged sections and duplicate articles via content hashing
 3. **Extract** — sends article text to a local Ollama model for structured startup data
-4. **Persist** — writes dated Excel workbooks and upserts rows into Postgres (`agritech.news`)
+4. **Persist** — upserts startup rows into Postgres (`agritech.news`) and mirrors the same data in `./data/agritech-news.xlsx`; append-only crawl events go to `agritech.logs` and `./data/agritech-logs.xlsx`
 5. **Schedule** — runs all enabled source jobs on a configurable interval, with a **delay between jobs** so they do not overlap
 
 ### Current sources
@@ -230,20 +230,19 @@ Auth files (gitignored):
 
 ## Output
 
-Each job run writes:
+Each run updates two fixed Excel files under `./data/` (when `AGRITECH_EXCEL_ENABLED=true`):
 
 ```
-data/runs/YYYY-MM-DD/
-  agritech-startups.xlsx      # all sources in one workbook
-  run-summary.json
-  logs/crawl.json
+data/
+  agritech-news.xlsx   # mirrors agritech.news (upsert by entry_key each run)
+  agritech-logs.xlsx   # mirrors agritech.logs (append each crawl event + run_complete)
 ```
 
-Postgres:
+Postgres (when enabled) holds the same data:
 
 | Table | Purpose |
 |---|---|
-| `agritech.news` | Startup rows (upsert by URL) |
+| `agritech.news` | Startup rows (upsert by `entry_key`) |
 | `agritech.logs` | Per-article events + run summaries |
 
 ---
@@ -252,7 +251,7 @@ Postgres:
 
 | Variable | Description |
 |---|---|
-| `AGRITECH_EXCEL_ENABLED` | Write Excel per run (default `true`) |
+| `AGRITECH_EXCEL_ENABLED` | Maintain `./data/agritech-news.xlsx` and `./data/agritech-logs.xlsx` (default `true`) |
 | `AGRITECH_POSTGRES_ENABLED` | Upsert to Postgres (default `true`) |
 | `AGRITECH_AI_ENABLED` | Ollama extraction (default `true`) |
 | `AGRITECH_BROWSER_FALLBACK_ENABLED` | agent-browser when HTTP HTML is too thin |

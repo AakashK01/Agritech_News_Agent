@@ -1,4 +1,5 @@
 import type { StartupNewsRow } from './types';
+import type { CrawlLogEntry } from '../domain/types';
 
 export type SourceLogAction =
     | 'new'
@@ -95,6 +96,7 @@ export class RunContext {
     readonly runDir: string;
     readonly startedAt: string;
     readonly rows: StartupNewsRow[] = [];
+    readonly pendingLogs: CrawlLogEntry[] = [];
     readonly seenEntryKeys = new Set<string>();
     private sourceLogs = new Map<string, SourceRunLog>();
 

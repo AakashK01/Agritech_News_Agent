@@ -113,7 +113,7 @@ export class Inc42NewsFragment extends BaseFragment {
                 articlesScanned: summary.totals.articlesScanned,
                 newRows: summary.totals.new,
                 updatedRows: summary.totals.updated,
-                excelPath: summary.excelPath,
+                excelPaths: summary.excelPaths,
             });
         } finally {
             await this.agentBrowser.closeSession(sessionId, profileCwd).catch(() => undefined);

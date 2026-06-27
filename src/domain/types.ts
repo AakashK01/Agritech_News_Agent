@@ -8,6 +8,18 @@ export interface SectionSeed {
 
 export type EntryStatus = 'new' | 'updated';
 
+export type CrawlLogEvent = 'new' | 'updated' | 'skipped' | 'not_relevant' | 'error' | 'run_complete';
+
+export interface CrawlLogEntry {
+    runId: string;
+    sourceId: string;
+    event: CrawlLogEvent;
+    url?: string | null;
+    reason?: string | null;
+    entryKey?: string | null;
+    meta?: Record<string, unknown> | null;
+}
+
 export interface StartupNewsRow {
     entryKey: string;
     sourceUrl: string;

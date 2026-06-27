@@ -11,7 +11,7 @@ export interface RunSummary {
     startedAt: string;
     completedAt: string;
     storage: { excel: boolean; postgres: boolean };
-    excelPath: string | null;
+    excelPaths: { news: string; logs: string } | null;
     totals: SourceRunStats;
     sources: Array<{ id: string } & SourceRunStats>;
 }
@@ -39,18 +39,20 @@ export class RunHistoryService {
         return this.postgres.filterKnownUrls(urls);
     }
 
-    /** Logs an article-level event to agritech.logs. No-op when Postgres is disabled. */
+    /** Logs an article-level event to agritech.logs and buffers for Excel. */
     async logEvent(
         ctx: RunContext,
         sourceId: string,
         entry: Omit<LogEntry, 'runId' | 'sourceId'>,
     ): Promise<void> {
+        const fullEntry: LogEntry = { runId: ctx.runId, sourceId, ...entry };
+        ctx.pendingLogs.push(fullEntry);
+
         if (!this.postgres) {
             return;
         }
-        await this.postgres.insertLog({ runId: ctx.runId, sourceId, ...entry }).catch((err: unknown) => {
+        await this.postgres.insertLog(fullEntry).catch((err: unknown) => {
             const msg = err instanceof Error ? err.message : String(err);
-            // Non-fatal — logging errors must not abort the crawl
             console.warn(`[RunHistoryService] insertLog failed: ${msg}`);
         });
     }
@@ -58,15 +60,6 @@ export class RunHistoryService {
     async completeRun(ctx: RunContext): Promise<RunSummary> {
         const startedAt = ctx.startedAt;
         const completedAt = new Date().toISOString();
-
-        let excelPath: string | null = null;
-        if (this.config.AGRITECH_EXCEL_ENABLED) {
-            excelPath = await this.excelStore.createWorkbook(ctx.runDir, ctx.rows);
-        }
-
-        if (this.config.AGRITECH_POSTGRES_ENABLED && this.postgres) {
-            await this.postgres.upsertNews(ctx.rows);
-        }
 
         const sourceSummaries: Array<{ id: string } & SourceRunStats> = [];
         let totals: SourceRunStats = emptyStats();
@@ -86,21 +79,33 @@ export class RunHistoryService {
                 excel: this.config.AGRITECH_EXCEL_ENABLED,
                 postgres: this.config.AGRITECH_POSTGRES_ENABLED,
             },
-            excelPath,
+            excelPaths: null,
             totals,
             sources: sourceSummaries,
         };
 
+        const runCompleteEntry: LogEntry = {
+            runId: ctx.runId,
+            sourceId: 'orchestrator',
+            event: 'run_complete',
+            meta: summary as unknown as Record<string, unknown>,
+        };
+
         if (this.postgres) {
-            await this.postgres.insertLog({
-                runId: ctx.runId,
-                sourceId: 'orchestrator',
-                event: 'run_complete',
-                meta: summary as unknown as Record<string, unknown>,
-            }).catch((err: unknown) => {
+            await this.postgres.insertLog(runCompleteEntry).catch((err: unknown) => {
                 const msg = err instanceof Error ? err.message : String(err);
                 console.warn(`[RunHistoryService] run_complete log failed: ${msg}`);
             });
+        }
+
+        if (this.config.AGRITECH_EXCEL_ENABLED) {
+            const newsPath = await this.excelStore.upsertNewsFile(ctx.rows);
+            const logsPath = await this.excelStore.appendLogsFile([...ctx.pendingLogs, runCompleteEntry]);
+            summary.excelPaths = { news: newsPath, logs: logsPath };
+        }
+
+        if (this.config.AGRITECH_POSTGRES_ENABLED && this.postgres) {
+            await this.postgres.upsertNews(ctx.rows);
         }
 
         return summary;
