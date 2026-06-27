@@ -3,6 +3,7 @@ import { BaseFragment } from '../lib/fragment';
 import { logger } from '../lib/logger';
 import type { AgriTechConfig } from '../config/app-config';
 import {
+    INC42_ARTICLE_DEBUG_PAUSE_MS,
     INC42_ARTICLE_MIN_BODY_CHARS,
     INC42_ARTICLE_SETTLE_MS,
     INC42_ARTICLE_SNAPSHOT_MAX_RETRIES,
@@ -23,6 +24,14 @@ import type { RunHistoryService } from '../persistence/run-history.service';
 import { canonicalizeSourceUrl } from '../utils/url';
 
 const LOG_PREFIX = 'Inc42NewsFragment';
+
+function countWords(text: string): number {
+    const trimmed = text.trim();
+    if (trimmed.length === 0) {
+        return 0;
+    }
+    return trimmed.split(/\s+/).length;
+}
 
 function countNewRows(ctx: RunContext): number {
     return ctx.rows.filter((r) => r.entryStatus === 'new').length;
@@ -94,6 +103,7 @@ export class Inc42NewsFragment extends BaseFragment {
                     index: sourceLog.articlesScanned,
                     of: linksToProcess.length,
                 });
+                await this.agentBrowser.ensureListingTabOnly(sessionId, profileCwd);
                 await this.processArticle(link, ctx, sourceLog, sessionId, profileCwd);
             }
 
@@ -122,14 +132,17 @@ export class Inc42NewsFragment extends BaseFragment {
         let title = '';
         let bodyExcerpt = '';
         let articleTabOpened = false;
+        let articleTabIndex: number | undefined;
+        let lastSnapshot = '';
 
         try {
             try {
-                await this.agentBrowser.openArticleInNewTab(sessionId, profileCwd, canonical);
+                articleTabIndex = await this.agentBrowser.openArticleInNewTab(sessionId, profileCwd, canonical);
                 articleTabOpened = true;
 
                 for (let attempt = 1; attempt <= INC42_ARTICLE_SNAPSHOT_MAX_RETRIES; attempt++) {
                     const snapshot = await this.agentBrowser.snapshot(sessionId, profileCwd);
+                    lastSnapshot = snapshot;
 
                     if (snapshotIndicatesLoginRequired(snapshot)) {
                         logger.warn(`${LOG_PREFIX} login required on article page`, { url: canonical });
@@ -160,6 +173,17 @@ export class Inc42NewsFragment extends BaseFragment {
                         await this.agentBrowser.waitMs(sessionId, profileCwd, INC42_ARTICLE_SETTLE_MS);
                     }
                 }
+
+                logger.info(`${LOG_PREFIX} [debug] snapshot content`, {
+                    url: canonical,
+                    snapshotChars: lastSnapshot.length,
+                    snapshotWords: countWords(lastSnapshot),
+                    titleChars: title.length,
+                    titleWords: countWords(title),
+                    bodyChars: bodyExcerpt.length,
+                    bodyWords: countWords(bodyExcerpt),
+                });
+                await this.agentBrowser.waitMs(sessionId, profileCwd, INC42_ARTICLE_DEBUG_PAUSE_MS);
             } catch (err: unknown) {
                 const reason = `article_fetch: ${err instanceof Error ? err.message : String(err)}`;
                 logger.warn(`${LOG_PREFIX} article fetch failed`, { url: canonical, reason });
@@ -168,7 +192,19 @@ export class Inc42NewsFragment extends BaseFragment {
                 return;
             } finally {
                 if (articleTabOpened) {
-                    await this.agentBrowser.closeArticleTab(sessionId, profileCwd).catch(() => undefined);
+                    try {
+                        await this.agentBrowser.closeArticleTab(
+                            sessionId,
+                            profileCwd,
+                            articleTabIndex,
+                        );
+                    } catch (err: unknown) {
+                        logger.warn(`${LOG_PREFIX} failed to close article tab`, {
+                            url: canonical,
+                            articleTabIndex,
+                            reason: err instanceof Error ? err.message : String(err),
+                        });
+                    }
                 }
             }
 
@@ -226,6 +262,19 @@ export class Inc42NewsFragment extends BaseFragment {
             }
 
             const extracted = await this.extractor.extract({ title, bodyExcerpt, sourceUrl: canonical });
+
+            logger.info(`${LOG_PREFIX} [debug] ollama output`, {
+                url: canonical,
+                extractionFailed: extracted.extractionFailed,
+                isRelevant: extracted.isRelevant,
+                startupNameChars: extracted.startupName?.length ?? 0,
+                startupNameWords: countWords(extracted.startupName ?? ''),
+                startupWebsiteChars: extracted.startupWebsite?.length ?? 0,
+                descriptionChars: extracted.description?.length ?? 0,
+                descriptionWords: countWords(extracted.description ?? ''),
+                newsSummaryChars: extracted.newsSummary?.length ?? 0,
+                newsSummaryWords: countWords(extracted.newsSummary ?? ''),
+            });
 
             if (extracted.extractionFailed) {
                 logger.warn(`${LOG_PREFIX} Ollama extraction failed`, { url: canonical, title });

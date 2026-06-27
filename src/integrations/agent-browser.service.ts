@@ -22,6 +22,85 @@ export interface InvokeResult {
     stderr: string;
 }
 
+export interface BrowserTabInfo {
+    index: number;
+    active: boolean;
+    url?: string;
+}
+
+/** Parse `tab list` / `tab list --json` stdout from agent-browser v0.25+. */
+export function parseTabListOutput(stdout: string): BrowserTabInfo[] | null {
+    const trimmed = stdout.trim();
+    if (trimmed.length === 0) {
+        return null;
+    }
+
+    if (trimmed.startsWith('{')) {
+        try {
+            const parsed = JSON.parse(trimmed) as unknown;
+            if (parsed && typeof parsed === 'object') {
+                const envelope = parsed as {
+                    data?: { tabs?: unknown[] };
+                    tabs?: unknown[];
+                };
+                const tabs = envelope.data?.tabs ?? envelope.tabs;
+                if (Array.isArray(tabs)) {
+                    return normalizeTabEntries(tabs);
+                }
+            }
+        } catch {
+            return null;
+        }
+        return null;
+    }
+
+    if (trimmed.startsWith('[')) {
+        try {
+            const parsed = JSON.parse(trimmed) as unknown;
+            if (Array.isArray(parsed)) {
+                return normalizeTabEntries(parsed);
+            }
+        } catch {
+            // Fall through to plain-text tab lines like "[0] title - url".
+        }
+    }
+
+    const tabs: BrowserTabInfo[] = [];
+    const linePattern = /^[\s→]*\[(\d+)\]\s*(.*?)(?:\s+-\s+(.*))?$/;
+    for (const line of trimmed.split('\n')) {
+        const match = line.trim().length > 0 ? linePattern.exec(line) : null;
+        if (!match) {
+            continue;
+        }
+        tabs.push({
+            index: Number.parseInt(match[1], 10),
+            active: line.includes('→'),
+            url: match[3]?.trim() || undefined,
+        });
+    }
+
+    return tabs.length > 0 ? tabs : null;
+}
+
+function normalizeTabEntries(entries: unknown[]): BrowserTabInfo[] | null {
+    const tabs: BrowserTabInfo[] = [];
+    for (const entry of entries) {
+        if (!entry || typeof entry !== 'object') {
+            continue;
+        }
+        const tab = entry as { index?: number; active?: boolean; url?: string };
+        if (typeof tab.index !== 'number') {
+            continue;
+        }
+        tabs.push({
+            index: tab.index,
+            active: tab.active === true,
+            url: typeof tab.url === 'string' ? tab.url : undefined,
+        });
+    }
+    return tabs.length > 0 ? tabs : null;
+}
+
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -296,76 +375,183 @@ export class AgentBrowserService {
         }
     }
 
-    /** Open an article URL in a new tab, switch to it, and wait for the page to settle. */
+    /** Open an article URL in a new tab, switch to it, and wait for the page to settle. Returns the article tab index. */
     async openArticleInNewTab(
         sessionId: string,
         profileCwd: string,
         url: string,
         settleMs = INC42_ARTICLE_SETTLE_MS,
-    ): Promise<void> {
-        const tabsBefore = await this.getTabCount(sessionId, profileCwd);
+    ): Promise<number> {
+        const tabsBefore = await this.listTabs(sessionId, profileCwd);
+        const tabsBeforeCount = tabsBefore?.length ?? 0;
+
         const res = await this.invoke(sessionId, profileCwd, ['tab', 'new', url]);
         if (res.code !== 0) {
             throw new Error(`agent-browser tab new failed: ${res.stderr.slice(0, 400)}`);
         }
 
-        const tabsAfter = await this.getTabCount(sessionId, profileCwd);
-        if (tabsAfter > tabsBefore) {
-            await this.switchToTab(sessionId, profileCwd, tabsAfter - 1);
+        const tabsAfter = await this.listTabs(sessionId, profileCwd);
+        if (!tabsAfter || tabsAfter.length === 0) {
+            throw new Error('agent-browser tab new succeeded but tab list is empty');
         }
 
+        const activeTab = tabsAfter.find((tab) => tab.active);
+        const articleTabIndex =
+            activeTab?.index ??
+            (tabsAfter.length > tabsBeforeCount ? tabsAfter[tabsAfter.length - 1].index : undefined);
+
+        if (articleTabIndex === undefined) {
+            throw new Error('agent-browser could not determine article tab index after tab new');
+        }
+
+        await this.switchToTab(sessionId, profileCwd, articleTabIndex);
         await this.waitMs(sessionId, profileCwd, settleMs);
+
+        logger.info('agent-browser opened article tab', {
+            articleTabIndex,
+            tabsBefore: tabsBeforeCount,
+            tabsAfter: tabsAfter.length,
+            url,
+        });
+        return articleTabIndex;
     }
 
     /**
      * Close the article tab without closing the listing tab.
      * Never closes when only one tab remains — avoids killing the browser session.
      */
-    async closeArticleTab(sessionId: string, profileCwd: string): Promise<void> {
-        const tabCount = await this.getTabCount(sessionId, profileCwd);
-        if (tabCount <= 1) {
-            return;
-        }
-
-        const articleTabIndex = tabCount - 1;
-        await this.switchToTab(sessionId, profileCwd, articleTabIndex);
-        const closeRes = await this.invoke(sessionId, profileCwd, ['tab', 'close']);
-        if (closeRes.code !== 0) {
-            logger.warn('agent-browser tab close failed — leaving session open', {
-                code: closeRes.code,
-                stderr: closeRes.stderr.slice(0, 200),
+    async closeArticleTab(
+        sessionId: string,
+        profileCwd: string,
+        articleTabIndex?: number,
+        listingTabIndex = 0,
+    ): Promise<void> {
+        const tabCountBefore = await this.getTabCount(sessionId, profileCwd);
+        if (tabCountBefore <= 1) {
+            logger.warn('agent-browser closeArticleTab skipped — single tab', {
+                tabCountBefore,
+                articleTabIndex,
             });
             return;
         }
 
-        await this.switchToTab(sessionId, profileCwd, 0).catch(() => undefined);
+        let closed = false;
+
+        if (articleTabIndex !== undefined && articleTabIndex > listingTabIndex) {
+            const closeRes = await this.invoke(sessionId, profileCwd, ['tab', 'close', String(articleTabIndex)]);
+            if (closeRes.code === 0) {
+                closed = true;
+            } else {
+                logger.warn('agent-browser tab close by index failed — trying current tab', {
+                    articleTabIndex,
+                    code: closeRes.code,
+                    stderr: closeRes.stderr.slice(0, 200),
+                });
+                await this.switchToTab(sessionId, profileCwd, articleTabIndex).catch(() => undefined);
+                const fallbackRes = await this.invoke(sessionId, profileCwd, ['tab', 'close']);
+                closed = fallbackRes.code === 0;
+                if (!closed) {
+                    logger.warn('agent-browser tab close fallback failed', {
+                        code: fallbackRes.code,
+                        stderr: fallbackRes.stderr.slice(0, 200),
+                    });
+                }
+            }
+        } else {
+            const lastTabIndex = tabCountBefore - 1;
+            await this.switchToTab(sessionId, profileCwd, lastTabIndex);
+            const closeRes = await this.invoke(sessionId, profileCwd, ['tab', 'close']);
+            closed = closeRes.code === 0;
+            if (!closed) {
+                logger.warn('agent-browser tab close failed — leaving session open', {
+                    code: closeRes.code,
+                    stderr: closeRes.stderr.slice(0, 200),
+                });
+            }
+        }
+
+        await this.closeAllTabsExceptListing(sessionId, profileCwd, listingTabIndex);
+
+        const tabCountAfter = await this.getTabCount(sessionId, profileCwd);
+        await this.switchToTab(sessionId, profileCwd, listingTabIndex).catch(() => undefined);
+
+        logger.info('agent-browser closed article tab', {
+            articleTabIndex,
+            tabCountBefore,
+            tabCountAfter,
+            closed,
+        });
+    }
+
+    /** Close any extra tabs left open; keep only the listing tab at index 0. */
+    async ensureListingTabOnly(
+        sessionId: string,
+        profileCwd: string,
+        listingTabIndex = 0,
+    ): Promise<void> {
+        const tabCountBefore = await this.getTabCount(sessionId, profileCwd);
+        if (tabCountBefore <= 1) {
+            return;
+        }
+        logger.warn('agent-browser extra tabs detected before article — cleaning up', { tabCountBefore });
+        await this.closeAllTabsExceptListing(sessionId, profileCwd, listingTabIndex);
+    }
+
+    private async closeAllTabsExceptListing(
+        sessionId: string,
+        profileCwd: string,
+        listingTabIndex: number,
+    ): Promise<void> {
+        let tabCount = await this.getTabCount(sessionId, profileCwd);
+        while (tabCount > 1) {
+            const indexToClose = tabCount - 1;
+            const closeRes = await this.invoke(sessionId, profileCwd, ['tab', 'close', String(indexToClose)]);
+            if (closeRes.code !== 0) {
+                await this.switchToTab(sessionId, profileCwd, indexToClose).catch(() => undefined);
+                const fallbackRes = await this.invoke(sessionId, profileCwd, ['tab', 'close']);
+                if (fallbackRes.code !== 0) {
+                    logger.warn('agent-browser cleanup tab close failed', {
+                        indexToClose,
+                        code: fallbackRes.code,
+                        stderr: fallbackRes.stderr.slice(0, 200),
+                    });
+                    break;
+                }
+            }
+            tabCount = await this.getTabCount(sessionId, profileCwd);
+        }
+        await this.switchToTab(sessionId, profileCwd, listingTabIndex).catch(() => undefined);
+    }
+
+    private async listTabs(sessionId: string, profileCwd: string): Promise<BrowserTabInfo[] | null> {
+        const jsonRes = await this.invoke(sessionId, profileCwd, ['tab', 'list', '--json']);
+        if (jsonRes.code === 0) {
+            const tabs = parseTabListOutput(jsonRes.stdout);
+            if (tabs !== null) {
+                return tabs;
+            }
+        }
+
+        const plainRes = await this.invoke(sessionId, profileCwd, ['tab', 'list']);
+        if (plainRes.code === 0) {
+            const tabs = parseTabListOutput(plainRes.stdout);
+            if (tabs !== null) {
+                return tabs;
+            }
+        }
+
+        return null;
     }
 
     private async getTabCount(sessionId: string, profileCwd: string): Promise<number> {
-        const res = await this.invoke(sessionId, profileCwd, ['tab', 'list', '--json']);
-        if (res.code !== 0) {
-            return 1;
+        const tabs = await this.listTabs(sessionId, profileCwd);
+        if (tabs !== null && tabs.length > 0) {
+            return tabs.length;
         }
 
-        try {
-            const parsed = JSON.parse(res.stdout.trim()) as unknown;
-            if (Array.isArray(parsed)) {
-                return parsed.length;
-            }
-            if (parsed && typeof parsed === 'object') {
-                const tabs = (parsed as { tabs?: unknown[] }).tabs;
-                if (Array.isArray(tabs)) {
-                    return tabs.length;
-                }
-                const count = (parsed as { count?: number }).count;
-                if (typeof count === 'number' && count > 0) {
-                    return count;
-                }
-            }
-        } catch {
-            // Fall through to default.
-        }
-
+        logger.warn('agent-browser tab count unavailable — assuming 1 tab', {
+            stderr: 'tab list returned no parseable tabs',
+        });
         return 1;
     }
 

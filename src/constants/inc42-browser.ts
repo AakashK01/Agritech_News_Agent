@@ -19,6 +19,8 @@ export const INC42_DEFAULT_DEBUG_PORT = 9222;
 
 /** Wait after opening an article in a new tab before snapshot (ms). */
 export const INC42_ARTICLE_SETTLE_MS = 2000;
+/** Extra pause after snapshot debug log so the article tab stays visible (ms). */
+export const INC42_ARTICLE_DEBUG_PAUSE_MS = 5000;
 /** Max snapshot attempts when article content is incomplete. */
 export const INC42_ARTICLE_SNAPSHOT_MAX_RETRIES = 3;
 /** Minimum body excerpt length to consider a snapshot complete. */
